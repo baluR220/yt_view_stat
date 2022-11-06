@@ -1,5 +1,6 @@
 import csv
 import sys
+from datetime import datetime
 from multiprocessing import Pool
 
 import youtube_dl
@@ -21,7 +22,7 @@ def get_playlist_info(url, item, fn_only=False):
                 )
         except youtube_dl.utils.DownloadError:
             pass
-        finally:
+        else:
             break
     return data
 
@@ -52,6 +53,7 @@ def write_to_file(data_set, filename):
 
 
 if __name__ == "__main__":
+    t_start = datetime.now()
     url = sys.argv[1]
     data_set = []
     filename = get_filename(get_playlist_info(url, 1, fn_only=True))
@@ -71,3 +73,4 @@ if __name__ == "__main__":
         if stop:
             break
     write_to_file(data_set, filename)
+    print(datetime.now() - t_start)
