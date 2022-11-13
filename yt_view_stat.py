@@ -6,47 +6,48 @@ from multiprocessing import Pool
 import youtube_dl
 
 
-def worker(url, item):
-    return get_views(get_playlist_info(url, item))
-
-
-def get_playlist_info(url, item, fn_only=False):
-    ydl_options = {
-        'playlist_items': f'{item}',
-    }
+def worker(url_gen):
+    url = 'https://www.youtube.com/watch?v=' + url_gen['url']
     while True:
         try:
-            with youtube_dl.YoutubeDL(ydl_options) as ydl:
-                data = ydl.extract_info(
-                    url, download=False, process=(not fn_only)
-                )
-        except youtube_dl.utils.DownloadError:
+            data = get_views(get_info(url))
+        except Exception:
             pass
         else:
             break
+    return(data)
+
+
+def get_info(url):
+    ydl_options = {
+        'youtube_include_dash_manifest': False,
+        'socket_timeout': 5,
+    }
+    with youtube_dl.YoutubeDL(ydl_options) as ydl:
+        data = ydl.extract_info(
+            url, download=False, process=False
+        )
     return data
 
 
 def get_views(data):
-    try:
-        info = [
-            (data['entries'][0]['title']).replace('\xc2', ' '),
-            data['entries'][0]['view_count'],
-            'https://youtube.com/watch?v=' + data['entries'][0]['id']
-        ]
-    except IndexError:
-        info = []
+    info = [
+        (data['title']).replace('\xc2', ' '),
+        data['view_count'],
+        'https://youtube.com/watch?v=' + data['id']
+    ]
     return(info)
 
 
 def get_filename(data):
     filename = data['title'] + '.csv'
-    return(filename)
+    gen = data['entries']
+    return(filename, gen)
 
 
 def write_to_file(data_set, filename):
     # cp1251 for windows, utf-8 for other oses
-    with open(filename, 'w', encoding='cp1251') as w_file:
+    with open(filename, 'w', encoding='utf-8') as w_file:
         file_writer = csv.writer(w_file, delimiter=';')
         # csv.field_size_limit(120)
         file_writer.writerows(data_set)
@@ -55,22 +56,11 @@ def write_to_file(data_set, filename):
 if __name__ == "__main__":
     t_start = datetime.now()
     url = sys.argv[1]
-    data_set = []
-    filename = get_filename(get_playlist_info(url, 1, fn_only=True))
-    start = 1
-    step = 5
-    stop = False
-    while True:
-        with Pool(step) as p:
-            data = ((p.starmap(
-                worker, [(url, item) for item in range(start, start + step)]
-            )))
-        if [] in data:
-            stop = True
-            data = [line for line in data if line]
-        data_set.extend(data)
-        start += step
-        if stop:
-            break
+    filename, gen = get_filename(get_info(url))
+    with Pool() as p:
+        data_set = p.map(
+            worker, gen
+        )
+    print(len(data_set))
     write_to_file(data_set, filename)
     print(datetime.now() - t_start)
